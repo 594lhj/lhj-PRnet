@@ -165,9 +165,9 @@ def channelEstimate(ofdm_demod):
     plt.plot(allcarriers, abs(H_exact), label='correct channel')
     plt.stem(pilotcarriers, abs(hest_at_pilots), label='pilot estimates')
     plt.plot(allcarriers, abs(hest_abs), label='estimate channel via interplation')
-    plt.grid(True);
-    plt.xlabel('carrier index');
-    plt.ylabel('$|H(f)|$');
+    plt.grid(True)
+    plt.xlabel('carrier index')
+    plt.ylabel('$|H(f)|$')
     plt.legend()
     plt.ylim(0, 2)
     plt.show()

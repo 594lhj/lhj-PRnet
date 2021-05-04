@@ -6,18 +6,18 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as Data
 from matplotlib import pyplot as plt
+from PRnet import Autoencoder, Encoder, Decoder
 import scipy.io as scio
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 
-S = 5000
+S = 50000
 N = 256
 mu = 4
-vS = 100
-snr = 10
+vS = 1000
+snr = 20
 BATCH_SIZE = 100
-Epoch = 300
-
+Epoch = 100
 
 t = np.load('./data/train.npz')['data']
 train = t.reshape(S * N, mu)
@@ -42,54 +42,6 @@ valloader = Data.DataLoader(
 )
 
 
-class Autoencoder(nn.Module):
-    def __init__(self):
-        super(Autoencoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(N * 2, N * 2),
-            nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(N * 2, N * 2),
-            nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-
-            # nn.Linear(N * 2, N * 2),
-            # nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            # nn.ReLU(inplace=True),
-
-            nn.Linear(N * 2, N * 2))
-        self.decoder = nn.Sequential(
-            nn.Linear(N * 2, N * 2),
-            nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(N * 2, N * 2),
-            nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-
-            # nn.Linear(N * 2, N * 2),
-            # nn.BatchNorm1d(N * 2),
-            # nn.Dropout(0.5),
-            # nn.ReLU(inplace=True),
-
-            nn.Linear(N * 2, N * 2))
-
-    def forward(self, x):
-        encode = self.encoder(x.view(-1, N * 2)).reshape(-1, N, 2)
-        out = torch.ifft(encode, 1)
-        x = util.channel(out, snr, N) + out
-        # x = out
-        y = torch.fft(x, 1)
-        decode = self.decoder(y.view(-1, N * 2)).reshape(-1, N, 2)
-        return decode, out
-
-
 class My_loss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -107,7 +59,9 @@ class My_loss(nn.Module):
 
 
 def train():
-    autoencoder = Autoencoder()
+    encoder = Encoder(N)
+    decoder = Decoder(N)
+    autoencoder = Autoencoder(N, snr, encoder, decoder)
     optimizer = optim.Adam(autoencoder.parameters(), lr=0.001)
     myloss = My_loss()
     mse = nn.MSELoss()
@@ -123,13 +77,10 @@ def train():
             loss = myloss(decode, d, out, 0.1)
             epoch_cost += loss.data.numpy() / ((S - vS) / BATCH_SIZE)
 
-
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # if index==14:
-            #     print("output")
-            #     print(output)
+
 
         vl = 0
         mses = 0
@@ -137,11 +88,9 @@ def train():
             decode, out = autoencoder(v)
             vloss = myloss(decode, v, out, 0.1)
             vl += vloss.data.numpy() / (vS / BATCH_SIZE)
-            mseloss = mse(decode,v)
-            mses += mseloss.data.numpy() / ((S - vS) / BATCH_SIZE)
-            # if index==4:
-            #     print("out")
-            #     print(out)
+            mseloss = mse(decode, v)
+            mses += mseloss.data.numpy() / (vS / BATCH_SIZE)
+
 
         trainloss.append(epoch_cost)
         valloss.append(vl)
@@ -149,6 +98,10 @@ def train():
         print('trainloss:', epoch_cost)
         print('valloss:', vl)
         print('mseloss', mses)
+
+    torch.save(autoencoder, './model/autoencoder.pkl')
+    torch.save(encoder, './model/encoder.pkl')
+    torch.save(decoder, './model/decoder.pkl')
 
     plt.plot(trainloss, 'b', label="train")
     plt.plot(valloss, 'r', label="val")
